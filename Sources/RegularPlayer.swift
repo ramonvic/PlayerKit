@@ -51,11 +51,24 @@ extension AVMediaSelectionOption: TextTrackMetadata {
         // Prepare the old item for removal
         if let currentItem = self.player.currentItem {
             self.removePlayerItemObservers(fromPlayerItem: currentItem)
+
+            NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: currentItem)
+            NotificationCenter.default.removeObserver(self, name: .AVPlayerItemFailedToPlayToEndTime, object: currentItem)
         }
 
         // Replace it with the new item
         self.addPlayerItemObservers(toPlayerItem: playerItem)
+
+        NotificationCenter.default.addObserver(self, selector: #selector(playerItemDidPlayToEndTime(_:)), name: .AVPlayerItemDidPlayToEndTime, object: playerItem)
+        NotificationCenter.default.addObserver(self, selector: #selector(playerItemFailedToPlayToEndTime(_:)), name: .AVPlayerItemFailedToPlayToEndTime, object: playerItem)
+        
         self.player.replaceCurrentItem(with: playerItem)
+
+        if self.playbackLoops {
+            self.player.actionAtItemEnd = .none
+        } else {
+            self.player.actionAtItemEnd = .pause
+        }
     }
     
     // MARK: - ProvidesView
@@ -98,6 +111,37 @@ extension AVMediaSelectionOption: TextTrackMetadata {
             self.delegate?.playerDidUpdateState(player: self, previousState: oldValue)
         }
     }
+
+    public var playbackLoops: Bool {
+        get  {
+            return self.player.actionAtItemEnd == .none
+        }
+        set {
+            if newValue {
+                self.player.actionAtItemEnd = .none
+            } else {
+                self.player.actionAtItemEnd = .pause
+            }
+        }
+
+    }
+
+    public var playbackFreezesAtEnd: Bool = false
+
+    public var rate: Float = 1.0 {
+        didSet {
+            self.player.rate = self.rate
+        }
+    }
+
+    public var isMuted: Bool {
+        get {
+            return self.player.isMuted
+        }
+        set {
+            self.player.isMuted = newValue
+        }
+    }
     
     public var duration: TimeInterval {
         return self.player.currentItem?.duration.timeInterval ?? 0
@@ -131,9 +175,10 @@ extension AVMediaSelectionOption: TextTrackMetadata {
         let cmTime = CMTimeMakeWithSeconds(time, preferredTimescale: Int32(NSEC_PER_SEC))
         self.smoothSeek(to: cmTime)
     }
-
+    
     open func play() {
         self.player.play()
+        self.player.rate = self.rate
     }
     
     open func pause() {
@@ -278,6 +323,25 @@ extension AVMediaSelectionOption: TextTrackMetadata {
             
             self.playerTimeObserver = nil
         }
+    }
+
+    @objc internal func playerItemDidPlayToEndTime(_ aNotification: Notification) {
+        if self.playbackLoops {
+            self.delegate?.playerPlaybackWillLoop(player: self)
+            self.pause()
+            self.seek(to: 0)
+            self.play()
+        } else if self.playbackFreezesAtEnd {
+            self.pause()
+            self.delegate?.playerItemDidPlayToEndTime(player: self)
+        } else {
+            self.seek(to: 0)
+            self.pause()
+        }
+    }
+
+    @objc internal func playerItemFailedToPlayToEndTime(_ aNotification: Notification) {
+        self.state = .failed
     }
     
     // MARK: Observation

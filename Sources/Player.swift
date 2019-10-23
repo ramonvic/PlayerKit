@@ -48,6 +48,8 @@ public enum PlayerError: Int {
     func playerDidUpdatePlaying(player: Player)
     func playerDidUpdateTime(player: Player)
     func playerDidUpdateBufferedTime(player: Player)
+    func playerPlaybackWillLoop(player: Player)
+    func playerItemDidPlayToEndTime(player: Player)
 }
 
 /// An object that adopts the Player protocol is responsible for implementing the API and calling PlayerDelegate methods where appropriate.
@@ -55,6 +57,14 @@ public enum PlayerError: Int {
     weak var delegate: PlayerDelegate? { get set }
     
     var state: PlayerState { get }
+
+    var playbackLoops: Bool { get set }
+
+    var playbackFreezesAtEnd: Bool { get set }
+
+    var rate: Float { get set }
+
+    var isMuted: Bool { get set }
     
     var duration: TimeInterval { get }
     
